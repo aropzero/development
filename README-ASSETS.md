@@ -20,17 +20,20 @@ Semua aset di folder `assets/` **sudah benar-benar diunduh dari Internet** dalam
 
 ## Integrasi yang sudah selesai (di sesi ini)
 
-1. **SFX asli masuk ke game 2D `IRON FRONTLINE`** — `js/game.js` sekarang memuat file
-   `.ogg` CC0 yang sudah diunduh (ledakan, tembakan, benturan, klik UI) lewat WebAudio
-   `decodeAudioData`. Kalau file belum termuat (mis. dibuka langsung dari disk tanpa server
-   lokal), otomatis **fallback ke suara sintesis** — audio tidak pernah rusak.
-2. **Game 3D baru: `SIEGE: FALLEN GATE`** (`index3d.html` + `js/game3d.js`) — game
+1. **Game 3D `SIEGE: FALLEN GATE`** (`index3d.html` + `js/game3d.js`) — game
    pertahanan gerbang yang **dapat dimainkan**, memakai model glb asli dari `castle-kit`
    (gerbang, tembok, menara, trebuchet/catapult/ballista) dan `blocky-characters`
    (musuh). three.js + GLTFLoader dijalankan dari `js/vendor/` lokal → **tidak butuh CDN**
    saat runtime. Termasuk: pergerakan musuh di jalan, matematika proyektil (panah lurus &
    peluru parabola yang meledak), gelombang (20), supplies, integritas gerbang, upgrade/jual,
-   kamera orbit (drag) & zoom (scroll), dan suara sintesis.
+   kamera orbit (drag) & zoom (scroll).
+2. **SFX asli masuk ke game 3D** — `js/game3d.js` sekarang memuat file `.ogg` CC0 yang
+   sudah diunduh (ledakan, benturan, klik UI) lewat WebAudio `decodeAudioData`. Kalau file
+   belum termuat (mis. dibuka langsung dari disk tanpa server lokal), otomatis **fallback
+   ke suara sintesis** — audio tidak pernah rusak.
+3. **Game 2D `IRON FRONTLINE` dihapus** — proyek sekarang murni 3D. `index.html` redirect
+   ke `index3d.html`; `css/style.css` & `js/game.js` dihapus; APK Android hanya membungkus
+   game 3D (termasuk model glb, tekstur, dan sampel audio asli).
 
 ## Cara memainkan game 3D
 ```bash

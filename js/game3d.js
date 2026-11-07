@@ -49,17 +49,87 @@ const ENEMIES = {
 };
 const EKEYS = Object.keys(ENEMIES);
 
-// ---------- audio (synthesized) ----------
+// ---------- audio: real CC0 samples with synthesized fallback ----------
+// Real sound effects are CC0 from Kenney.nl and live in assets/audio/.
+// Each SFX call tries a real sample first; if the samples aren't loaded yet
+// (e.g. offline / no server), it automatically falls back to the synthesized
+// sound below. Audio can never break.
+const SFX_FILES = {
+  boom: [
+    'assets/audio/impact-sounds/Audio/impactMetal_heavy_000.ogg',
+    'assets/audio/impact-sounds/Audio/impactPlate_heavy_002.ogg',
+    'assets/audio/impact-sounds/Audio/impactPunch_heavy_000.ogg',
+    'assets/audio/impact-sounds/Audio/impactPlate_heavy_003.ogg',
+  ],
+  bolt: [
+    'assets/audio/impact-sounds/Audio/impactWood_light_001.ogg',
+    'assets/audio/impact-sounds/Audio/impactGeneric_light_000.ogg',
+    'assets/audio/impact-sounds/Audio/impactTin_medium_002.ogg',
+  ],
+  shell: [
+    'assets/audio/impact-sounds/Audio/impactMetal_medium_001.ogg',
+    'assets/audio/impact-sounds/Audio/impactWood_heavy_000.ogg',
+    'assets/audio/impact-sounds/Audio/impactPlate_medium_003.ogg',
+  ],
+  place: [
+    'assets/audio/interface-sounds/Audio/click_002.ogg',
+    'assets/audio/interface-sounds/Audio/confirmation_002.ogg',
+    'assets/audio/interface-sounds/Audio/drop_001.ogg',
+  ],
+  sell: [
+    'assets/audio/interface-sounds/Audio/drop_003.ogg',
+    'assets/audio/interface-sounds/Audio/close_002.ogg',
+    'assets/audio/interface-sounds/Audio/drop_001.ogg',
+  ],
+  upgrade: [
+    'assets/audio/interface-sounds/Audio/confirmation_001.ogg',
+    'assets/audio/interface-sounds/Audio/click_004.ogg',
+    'assets/audio/interface-sounds/Audio/confirmation_003.ogg',
+  ],
+};
 const AudioSys = {
-  ctx: null, master: null, on: true,
+  ctx: null, master: null, on: true, buf: {}, _loading: false, _loaded: false,
   ensure() {
-    if (this.ctx) return;
+    if (this.ctx) { this.loadSamples(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.5;
     this.master.connect(this.ctx.destination);
+    this.loadSamples();
+  },
+  async loadSamples() {
+    if (!this.ctx || this._loading || this._loaded) return;
+    this._loading = true;
+    try {
+      for (const [key, paths] of Object.entries(SFX_FILES)) {
+        const arr = [];
+        for (const p of paths) {
+          try {
+            const res = await fetch(p);
+            if (!res.ok) continue;
+            arr.push(await this.ctx.decodeAudioData(await res.arrayBuffer()));
+          } catch (e) { /* offline / decode failure -> keep fallback */ }
+        }
+        if (arr.length) this.buf[key] = arr;
+      }
+      this._loaded = true;
+    } finally { this._loading = false; }
+  },
+  sample(key) {
+    if (!this.on || !this.ctx) return false;
+    const arr = this.buf[key];
+    if (!arr || !arr.length) return false;
+    const b = arr[(Math.random() * arr.length) | 0];
+    const src = this.ctx.createBufferSource(); src.buffer = b;
+    const g = this.ctx.createGain();
+    const t = this.ctx.currentTime;
+    g.gain.setValueAtTime(0.85, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + b.duration - 0.02);
+    src.connect(g).connect(this.master);
+    src.start(t);
+    return true;
   },
   tone(f, d, type, g, slide) {
     if (!this.on || !this.ctx) return;
@@ -85,14 +155,14 @@ const AudioSys = {
     src.connect(flt).connect(v).connect(this.master);
     src.start(t0); src.stop(t0 + d + 0.03);
   },
-  boom() { this.noise(0.55, 420, 0.6, 0.85); this.tone(72, 0.5, 'sine', 0.7, 34); },
+  boom() { if (this.sample('boom')) return; this.noise(0.55, 420, 0.6, 0.85); this.tone(72, 0.5, 'sine', 0.7, 34); },
   shoot(kind) {
-    if (kind === 'bolt') this.noise(0.12, 1400, 1.2, 0.4);
-    else this.noise(0.22, 700, 0.8, 0.7);
+    if (kind === 'bolt') { if (this.sample('bolt')) return; this.noise(0.12, 1400, 1.2, 0.4); }
+    else { if (this.sample('shell')) return; this.noise(0.22, 700, 0.8, 0.7); }
   },
-  place() { this.tone(300, 0.08, 'triangle', 0.18, 520); },
-  sell() { this.noise(0.15, 800, 0.8, 0.4); },
-  upgrade() { this.tone(400, 0.1, 'triangle', 0.16, 720); },
+  place() { if (this.sample('place')) return; this.tone(300, 0.08, 'triangle', 0.18, 520); },
+  sell() { if (this.sample('sell')) return; this.noise(0.15, 800, 0.8, 0.4); },
+  upgrade() { if (this.sample('upgrade')) return; this.tone(400, 0.1, 'triangle', 0.16, 720); },
   horn() { this.tone(140, 0.9, 'sawtooth', 0.16, 110); this.tone(180, 0.9, 'triangle', 0.12, 130); },
   alarm() { this.tone(320, 0.35, 'square', 0.1, 240); },
 };

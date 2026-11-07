@@ -21,13 +21,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
- * BATTLE FORGE — Android wrapper.
+ * SIEGE: FALLEN GATE — Android wrapper.
  *
- * Hosts both games (2D "IRON FRONTLINE" and 3D "SIEGE: FALLEN GATE") from
- * Android assets inside a single WebView. Assets are served over a synthetic
- * HTTPS origin (https://appassets.androidplatform.net/) so that ES modules
- * and import maps (required by the 3D game) load correctly. No network
- * permission and no external dependencies are required.
+ * Hosts the 3D game from Android assets inside a single WebView. Assets are
+ * served over a synthetic HTTPS origin (https://appassets.androidplatform.net/)
+ * so that ES modules, import maps, audio samples and glTF models all load
+ * correctly. No network permission and no external dependencies are required.
  */
 public class MainActivity extends Activity {
 
@@ -62,7 +61,7 @@ public class MainActivity extends Activity {
         });
         web.setWebChromeClient(new WebChromeClient());
         web.setBackgroundColor(0xFF12151C);
-        web.loadUrl(BASE + "index.html");
+        web.loadUrl(BASE + "game3d/index.html");
 
         setContentView(web);
     }
