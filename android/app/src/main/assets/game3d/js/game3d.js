@@ -256,8 +256,55 @@ function fitToHeight(mesh, h) {
 function loadGLB(url) {
   const abs = new URL(url, document.baseURI || location.href).href;
   return new Promise((res, rej) => {
-    new GLTFLoader().load(abs, g => res(g.scene), undefined, rej);
+    new GLTFLoader().load(abs, g => res(g.scene), undefined,
+      err => rej(new Error(url + ' :: ' + (err && (err.message || err) || err)));
   });
+}
+
+// ---------- procedural fallback shapes (used if a real model fails to load) ----------
+const fallbacks = [];
+const _fbMat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 });
+const _fbBox = (c, w, h, d) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), _fbMat(c));
+function makeFallback(kind) {
+  const g = new THREE.Group();
+  if (kind === 'gate') {
+    const p1 = _fbBox(0x8a8f98, 0.8, 7, 0.8); p1.position.set(-3.5, 3.5, 0);
+    const p2 = _fbBox(0x8a8f98, 0.8, 7, 0.8); p2.position.set(3.5, 3.5, 0);
+    const beam = _fbBox(0x7a7f88, 8, 1, 0.8); beam.position.set(0, 7.4, 0);
+    g.add(p1, p2, beam);
+  } else if (kind === 'wall') {
+    const m = _fbBox(0x6f6f66, 5, 4, 0.7); m.position.y = 2; g.add(m);
+  } else if (kind === 'tower') {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 6, 8), _fbMat(0x77777a)); b.position.y = 3;
+    const top = _fbBox(0x55555a, 3, 1, 3); top.position.y = 6.4;
+    g.add(b, top);
+  } else if (kind === 'tree') {
+    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 2, 5), _fbMat(0x5a4630)); tr.position.y = 1;
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 4, 7), _fbMat(0x3f6b33)); tip.position.y = 3.6;
+    g.add(tr, tip);
+  } else if (kind === 'rock') {
+    const r = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6), _fbMat(0x6b6b63));
+    r.position.y = 1; r.scale.set(1.4, 0.8, 1.2); g.add(r);
+  } else if (kind === 'char') {
+    const body = _fbBox(0x4f4a44, 1.1, 1.6, 0.7); body.position.y = 1.1;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), _fbMat(0x8a6f55)); head.position.y = 2.5;
+    g.add(body, head);
+  } else { // weapon default: platform + arm
+    const pl = _fbBox(0x6b6253, 3.2, 0.6, 3.2); pl.position.y = 0.4;
+    const mast = _fbBox(0x4e463a, 0.5, 2.6, 0.5); mast.position.y = 2;
+    g.add(pl, mast);
+  }
+  return g;
+}
+
+async function loadModel(url, kind) {
+  try {
+    return await loadGLB(url);
+  } catch (e) {
+    console.warn('Asset fallback [' + kind + ']', url, e);
+    fallbacks.push(url);
+    return makeFallback(kind);
+  }
 }
 
 // ---------- built-in 3D primitives (shared) ----------
@@ -815,15 +862,15 @@ canvas.addEventListener('wheel', onWheel, { passive: false });
 // ---------- load assets & boot ----------
 async function boot() {
   try {
-    const loader = (u) => loadGLB(u);
+    const load = (u, kind) => loadModel(u, kind);
     const [charArr, ballista, catapult, trebuchet, gate, wall, tower, tree, rock] = await Promise.all([
-      Promise.all(CHAR_MODELS.map(loader)),
-      loader(WEAPONS.ballista.model), loader(WEAPONS.catapult.model), loader(WEAPONS.trebuchet.model),
-      loader(GLB('castle-kit/Models/GLB format/metal-gate.glb')),
-      loader(GLB('castle-kit/Models/GLB format/wall.glb')),
-      loader(GLB('castle-kit/Models/GLB format/tower-square.glb')),
-      loader(GLB('castle-kit/Models/GLB format/tree-large.glb')),
-      loader(GLB('castle-kit/Models/GLB format/rocks-large.glb')),
+      Promise.all(CHAR_MODELS.map((name, i) => load(GLB(name), 'char'))),
+      load(WEAPONS.ballista.model, 'weapon'), load(WEAPONS.catapult.model, 'weapon'), load(WEAPONS.trebuchet.model, 'weapon'),
+      load(GLB('castle-kit/Models/GLB format/metal-gate.glb'), 'gate'),
+      load(GLB('castle-kit/Models/GLB format/wall.glb'), 'wall'),
+      load(GLB('castle-kit/Models/GLB format/tower-square.glb'), 'tower'),
+      load(GLB('castle-kit/Models/GLB format/tree-large.glb'), 'tree'),
+      load(GLB('castle-kit/Models/GLB format/rocks-large.glb'), 'rock'),
     ]);
     CHAR_MODELS.forEach((name, i) => {
       const m = charArr[i];
@@ -840,8 +887,12 @@ async function boot() {
     renderWeaponBar(); updateHUD();
     $('loading').classList.add('hidden');
     G.loading = false;
+    if (fallbacks.length) {
+      toast(fallbacks.length + ' asset(s) fell back to simplified shapes (console has details)');
+      console.warn('Assets falling back to procedural shapes:', fallbacks);
+    }
   } catch (err) {
-    $('loading').textContent = 'Failed to load 3D assets: ' + (err && err.message || err);
+    $('loading').textContent = 'Failed to start: ' + (err && err.message || err);
     console.error(err);
   }
 }

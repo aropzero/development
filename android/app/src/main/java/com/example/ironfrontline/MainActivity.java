@@ -2,6 +2,7 @@ package com.example.ironfrontline;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Window;
@@ -16,9 +17,10 @@ import android.webkit.WebViewClient;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * SIEGE: FALLEN GATE — Android wrapper.
@@ -52,6 +54,10 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        // Everything is served from packaged assets via the interceptor. Block any
+        // real network access so a missed asset fails fast instead of silently
+        // hitting the internet (and never depends on the INTERNET permission).
+        s.setBlockNetworkLoads(true);
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -75,21 +81,52 @@ public class MainActivity extends Activity {
         if (path == null || path.isEmpty() || path.equals("/")) {
             path = "/index.html";
         }
-        // Decode percent-encoded characters (spaces, etc.) in the asset path.
-        try {
-            path = URLDecoder.decode(path, StandardCharsets.UTF_8.name());
-        } catch (Exception e) {
-            // fall through with the raw path
+        // Uri.getPath() returns the decoded path, but stay defensive: decode any
+        // leftover percent-encodings (e.g. %20 for spaces) without mangling '+'.
+        if (path.indexOf('%') >= 0) {
+            try {
+                path = Uri.decode(path);
+            } catch (Exception e) {
+                // fall through with the raw path
+            }
         }
         String assetPath = path.startsWith("/") ? path.substring(1) : path;
 
-        InputStream is = null;
+        InputStream is;
         try {
             is = getAssets().open(assetPath);
         } catch (IOException e) {
             return null;
         }
-        return new WebResourceResponse(mimeFor(assetPath), null, is);
+
+        // A well-formed response: explicit 200 status, CORS header (harmless for
+        // same-origin but satisfies any fetch/bitmap checks), no-cache, and a
+        // content length when the asset entry is file-backed.
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Access-Control-Allow-Origin", "*");
+        headers.put("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+        headers.put("Access-Control-Allow-Headers", "*");
+        headers.put("Cache-Control", "no-store, no-cache, must-revalidate");
+        headers.put("Pragma", "no-cache");
+
+        long length = -1;
+        try {
+            AssetFileDescriptor afd = getAssets().openFd(assetPath);
+            if (afd != null) {
+                length = afd.getLength();
+                afd.close();
+            }
+        } catch (IOException e) {
+            // stream assets (e.g. compressed media) have no file descriptor; skip length
+        }
+        if (length >= 0) {
+            headers.put("Content-Length", String.valueOf(length));
+        }
+
+        String mime = mimeFor(assetPath);
+        boolean isText = mime.startsWith("text/") || mime.equals("application/json");
+        String encoding = isText ? "utf-8" : null;
+        return new WebResourceResponse(mime, encoding, 200, "OK", headers, is);
     }
 
     private String mimeFor(String path) {
