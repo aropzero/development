@@ -35,11 +35,13 @@ jobs:
             SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
           fi
           echo "Using $SDKMANAGER"
+          # Accept licenses best-effort; ignore SIGPIPE from `yes` when sdkmanager closes stdin.
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          yes | "$SDKMANAGER" \
+          # Install required platform / build-tools (stdin from /dev/null, no pipe).
+          "$SDKMANAGER" \
             "platforms;android-36" \
             "build-tools;35.0.0" \
-            "build-tools;36.0.0"
+            "build-tools;36.0.0" </dev/null
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
