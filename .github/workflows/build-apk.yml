@@ -27,11 +27,19 @@ jobs:
           java-version: '17'
 
       - name: Install Android SDK components
-        uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platforms;android-36
-            build-tools;35.0.0
+        shell: bash
+        run: |
+          set -e
+          SDKMANAGER="$(ls -d "${ANDROID_HOME}/cmdline-tools/"*/bin/sdkmanager 2>/dev/null | head -n1)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "Using $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          yes | "$SDKMANAGER" \
+            "platforms;android-36" \
+            "build-tools;35.0.0" \
+            "build-tools;36.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
