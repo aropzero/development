@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIEGE FALLEN GATE — 3D Tactical Defense</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden;
+    background: #0d0f14; color: #cfd4dc; font-family: Georgia, 'Times New Roman', serif; }
+  #game3d { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+  .hud { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center;
+    justify-content: space-between; padding: 12px 18px; pointer-events: none;
+    background: linear-gradient(180deg, rgba(8,10,14,.82), rgba(8,10,14,0));
+    z-index: 10; text-shadow: 0 1px 2px #000; }
+  .hud .brand h1 { font-size: 18px; letter-spacing: 3px; color: #e8d9b0; }
+  .hud .brand small { display: block; font-size: 10px; letter-spacing: 2px; color: #9aa3ad; }
+  .stats { display: flex; gap: 16px; }
+  .stat { text-align: center; line-height: 1.15; }
+  .stat .lbl { font-size: 9px; letter-spacing: 2px; color: #8f98a2; text-transform: uppercase; }
+  .stat .val { font-size: 20px; color: #f0e6c8; font-weight: bold; }
+  .controls { display: flex; gap: 8px; pointer-events: auto; }
+  .btn { background: rgba(30,34,42,.9); color: #d7dce2; border: 1px solid #3b4350;
+    padding: 7px 14px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+  .btn:hover { background: #3a424f; }
+  .btn.primary { background: #8a6a2f; border-color: #c9a860; color: #fff; font-weight: bold; }
+  .link2d { position: absolute; right: 18px; bottom: 92px; z-index: 20; pointer-events: auto;
+    color: #9aa3ad; font-size: 12px; text-decoration: none; background: rgba(20,23,28,.8);
+    padding: 6px 10px; border-radius: 5px; border: 1px solid #3b4350; }
+  .link2d:hover { color: #fff; }
+
+  .panel { position: absolute; left: 50%; top: 76px; transform: translateX(-50%);
+    background: rgba(15,18,24,.94); border: 1px solid #4a5560; border-radius: 8px;
+    padding: 12px 14px; width: 260px; z-index: 20; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .panel h3 { color: #e8d9b0; font-size: 15px; margin-bottom: 6px; }
+  .panel .row { display: flex; justify-content: space-between; margin: 3px 0; font-size: 12px; color:#b9c1ca; }
+  .panel .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .panel .actions .btn { flex: 1; }
+
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 8px;
+    padding: 12px 16px; justify-content: center; background: linear-gradient(0deg,
+    rgba(8,10,14,.85), rgba(8,10,14,0)); z-index: 10; pointer-events: none; }
+  .tower-btn { pointer-events: auto; background: rgba(24,28,34,.92); border: 1px solid #3b4350;
+    border-radius: 8px; padding: 8px 12px; color: #cfd4dc; cursor: pointer; text-align: center;
+    min-width: 104px; }
+  .tower-btn:hover { border-color: #8a8f98; }
+  .tower-btn.selected { border-color: #c9a860; background: #2c2a1e; }
+  .tower-btn.cant { opacity: .45; cursor: not-allowed; }
+  .tower-btn .icon { font-size: 20px; display: block; }
+  .tower-btn .name { font-size: 12px; display: block; letter-spacing: 1px; }
+  .tower-btn .cost { font-size: 10px; display: block; color: #d9b45c; }
+
+  .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(5,7,10,.78); z-index: 30; }
+  .card { text-align: center; max-width: 520px; padding: 34px 40px; background: rgba(14,17,22,.96);
+    border: 1px solid #4a5560; border-radius: 12px; box-shadow: 0 10px 50px rgba(0,0,0,.6); }
+  .card h2 { font-size: 26px; color: #e8d9b0; letter-spacing: 2px; margin-bottom: 8px; }
+  .card p { color: #9aa3ad; font-size: 14px; line-height: 1.5; }
+  .card .howto { margin: 16px 0; text-align: left; font-size: 13px; color:#b9c1ca; }
+  .card .howto b { color: #e8d9b0; }
+  .card .btn.big { font-size: 16px; padding: 12px 28px; margin-top: 8px; }
+  .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: #0d0f14; z-index: 40; font-size: 16px; letter-spacing: 2px; color: #9aa3ad; }
+  .hidden { display: none !important; }
+
+  #toast { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%);
+    background: rgba(20,23,28,.95); border: 1px solid #4a5560; padding: 8px 16px;
+    border-radius: 6px; font-size: 13px; color: #e0b36a; z-index: 25; opacity: 0;
+    transition: opacity .3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="loading" id="loading">LOADING SIEGE ASSETS…</div>
+  <canvas id="game3d"></canvas>
+
+  <header class="hud">
+    <div class="brand">
+      <h1>SIEGE: FALLEN GATE</h1>
+      <small>3D TACTICAL DEFENSE · CC0 ASSETS</small>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="lbl">Supplies</div><div class="val" id="supply3d">200</div></div>
+      <div class="stat"><div class="lbl">Gate</div><div class="val" id="integrity3d">100</div></div>
+      <div class="stat"><div class="lbl">Wave</div><div class="val" id="wave3d">0</div></div>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="btnStart3d">▶ Deploy</button>
+      <button class="btn" id="btnPause3d">⏸</button>
+      <button class="btn" id="btnSpeed3d">1×</button>
+      <button class="btn" id="btnMute3d">🔊</button>
+    </div>
+  </header>
+
+  <a class="link2d" href="../game2d/index.html">→ 2D version (IRON FRONTLINE)</a>
+  <a class="link2d" href="../index.html" style="right:18px;bottom:126px;">⌂ Menu</a>
+
+  <div class="panel hidden" id="panel3d">
+    <h3 id="pnName3d">Weapon</h3>
+    <div id="pnStats3d"></div>
+    <div class="actions">
+      <button class="btn" id="btnUp3d">▲ Retrofit</button>
+      <button class="btn" id="btnSell3d">Scrap</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <nav class="bar" id="towerBar3d"></nav>
+
+  <div class="overlay" id="startOverlay3d">
+    <div class="card">
+      <h2>⚔ SIEGE: FALLEN GATE</h2>
+      <p>Your gate is the last line. Hold it against the advancing horde.</p>
+      <div class="howto">
+        <p><b>Left-click</b> open ground to deploy a siege engine from the bar at the bottom.</p>
+        <p><b>Click a deployed engine</b> to select it — retrofit (upgrade) or scrap (sell).</p>
+        <p><b>Drag</b> to orbit the camera, <b>scroll</b> to zoom.</p>
+        <p>Survive all <b>20 waves</b>. Don't let them reach the gate.</p>
+      </div>
+      <button class="btn primary big" id="btnPlay3d">⚔ Begin Siege</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="endOverlay3d">
+    <div class="card">
+      <h2 id="endTitle3d">Victory</h2>
+      <p id="endSub3d">The gate holds.</p>
+      <button class="btn primary big" id="btnRestart3d">↺ Redeploy</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "./js/vendor/three.module.js" } }
+  </script>
+  <script type="module" src="js/game3d.js"></script>
+</body>
+</html>
