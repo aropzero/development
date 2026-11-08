@@ -86,17 +86,25 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android packages
+      - name: Install Android SDK packages
         run: |
-          set -e
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;35.0.0" </dev/null
+          set -euo pipefail
+          # The ubuntu runner image ships the Android SDK with cmdline-tools;
+          # the setup-android action is not used because it still tries to
+          # install the long-removed "tools" package.
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          export ANDROID_SDK_ROOT="$SDK"
+          export ANDROID_HOME="$SDK"
+          SDKMGR="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMGR" ]; then
+            SDKMGR="$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -n1)"
+          fi
+          echo "Using sdkmanager: $SDKMGR"
+          test -x "$SDKMGR"
+          yes | "$SDKMGR" --licenses >/dev/null 2>&1 || true
+          "$SDKMGR" --install "platform-tools" "platforms;android-36" "build-tools;35.0.0" </dev/null
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$SDK" "$SDK" >> "$GITHUB_ENV"
+          "$SDK"/build-tools/35.0.0/aapt2 version || true
 
       - name: Cache Godot + export templates
         uses: actions/cache@v4
@@ -164,24 +172,23 @@ jobs:
         run: ~/godot/godot --headless --path . --import
 
       - name: Export release APK
-        env:
-          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ env.HOME }}/.android/horizoncity.keystore
-          GODOT_ANDROID_KEYSTORE_RELEASE_USER: horizoncity
-          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: horizoncity
+        id: export_release
         run: |
           set -euo pipefail
+          export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="$HOME/.android/horizoncity.keystore"
+          export GODOT_ANDROID_KEYSTORE_RELEASE_USER="horizoncity"
+          export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="horizoncity"
           mkdir -p build
           ~/godot/godot --headless --path . --export-release "Android" "build/${EXPORT_NAME}.apk"
           ls -lh build/
 
       - name: Fallback to debug APK
-        if: failure()
-        env:
-          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ env.HOME }}/.android/horizoncity.keystore
-          GODOT_ANDROID_KEYSTORE_DEBUG_USER: horizoncity
-          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: horizoncity
+        if: steps.export_release.outcome == 'failure'
         run: |
           set -euo pipefail
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/horizoncity.keystore"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER="horizoncity"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="horizoncity"
           mkdir -p build
           ~/godot/godot --headless --path . --export-debug "Android" "build/${EXPORT_NAME}.apk"
           ls -lh build/
