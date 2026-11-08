@@ -1,0 +1,243 @@
+name: Build Horizon City
+
+# Builds a signed Android APK with Godot 4.7.2 and publishes it as a
+# downloadable GitHub Release. Also runs the headless gameplay smoke test.
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.7.2"
+  GODOT_RELEASE: "4.7.2-stable"
+  GODOT_TEMPLATES_DIR: "4.7.2.stable"
+  EXPORT_NAME: "HorizonCity"
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------ tests
+  smoke-test:
+    name: Headless smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot binary
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-bin-${{ env.GODOT_RELEASE }}-${{ runner.os }}
+
+      - name: Install Godot
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/godot/godot" ]; then
+            mkdir -p "$HOME/godot"
+            curl -fsSL -o /tmp/godot.zip \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_linux.x86_64.zip"
+            unzip -q -o /tmp/godot.zip -d "$HOME/godot"
+            mv "$HOME/godot/Godot_v${GODOT_RELEASE}_linux.x86_64" "$HOME/godot/godot"
+            chmod +x "$HOME/godot/godot"
+          fi
+          "$HOME/godot/godot" --version
+
+      - name: Import resources
+        run: ~/godot/godot --headless --path . --import
+
+      - name: Run gameplay smoke test
+        run: |
+          set -o pipefail
+          ~/godot/godot --headless --path . res://tools/SmokeTest.tscn | tee smoke.log
+          grep -q "SMOKE RESULT: PASS" smoke.log
+
+      - name: Upload smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-log
+          path: smoke.log
+          if-no-files-found: ignore
+
+  # ------------------------------------------------------------------ android
+  android:
+    name: Android APK
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        run: |
+          set -e
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;35.0.0" </dev/null
+
+      - name: Cache Godot + export templates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-full-${{ env.GODOT_RELEASE }}-${{ runner.os }}
+
+      - name: Install Godot and export templates
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/godot/godot" ]; then
+            mkdir -p "$HOME/godot"
+            curl -fsSL -o /tmp/godot.zip \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_linux.x86_64.zip"
+            unzip -q -o /tmp/godot.zip -d "$HOME/godot"
+            mv "$HOME/godot/Godot_v${GODOT_RELEASE}_linux.x86_64" "$HOME/godot/godot"
+            chmod +x "$HOME/godot/godot"
+          fi
+
+          TPL="$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATES_DIR}"
+          if [ ! -f "$TPL/android_release.apk" ]; then
+            mkdir -p "$HOME/.local/share/godot/export_templates"
+            curl -fsSL -o /tmp/templates.tpz \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_export_templates.tpz"
+            rm -rf /tmp/tpl && mkdir -p /tmp/tpl
+            unzip -q -o /tmp/templates.tpz -d /tmp/tpl
+            mkdir -p "$TPL"
+            # Keep only what Android exports need to keep the cache small.
+            cp /tmp/tpl/templates/android_debug.apk "$TPL/"
+            cp /tmp/tpl/templates/android_release.apk "$TPL/"
+            cp /tmp/tpl/templates/version.txt "$TPL/" 2>/dev/null || true
+            rm -rf /tmp/tpl /tmp/templates.tpz
+          fi
+          ls -la "$TPL"
+
+      - name: Create signing keystore
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v \
+            -keystore "$HOME/.android/horizoncity.keystore" \
+            -alias horizoncity \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass horizoncity -keypass horizoncity \
+            -dname "CN=Horizon City, OU=Games, O=Horizon City, L=Internet, C=US" \
+            -deststoretype pkcs12
+
+      - name: Configure Godot editor settings
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot"
+          # Godot resolves the Android SDK and JDK from the editor settings.
+          cat > "$HOME/.config/godot/editor_settings-4.7.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_SDK_ROOT}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          EOF
+          echo "SDK: ${ANDROID_SDK_ROOT}  JDK: ${JAVA_HOME}"
+
+      - name: Import project
+        run: ~/godot/godot --headless --path . --import
+
+      - name: Export release APK
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ env.HOME }}/.android/horizoncity.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: horizoncity
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: horizoncity
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          ~/godot/godot --headless --path . --export-release "Android" "build/${EXPORT_NAME}.apk"
+          ls -lh build/
+
+      - name: Fallback to debug APK
+        if: failure()
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ env.HOME }}/.android/horizoncity.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: horizoncity
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: horizoncity
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          ~/godot/godot --headless --path . --export-debug "Android" "build/${EXPORT_NAME}.apk"
+          ls -lh build/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-city-apk
+          path: build/*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize
+        run: |
+          {
+            echo "## ✅ Horizon City APK built"
+            echo ""
+            echo "| file | size |"
+            echo "|---|---|"
+            for f in build/*.apk; do
+              echo "| \`$(basename "$f")\` | $(du -h "$f" | cut -f1) |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ------------------------------------------------------------------ release
+  release:
+    name: Publish release
+    needs: android
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: horizon-city-apk
+          path: dist
+
+      - name: Publish rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Horizon City — latest build"
+          body: |
+            **Horizon City** — a calm 3D city builder for Android.
+
+            Built automatically from `${{ github.sha }}` by GitHub Actions.
+
+            ### Install
+            1. Download `HorizonCity.apk` below.
+            2. Allow "Install unknown apps" for your browser / file manager.
+            3. Open the file and install. Works on arm64 Android 6.0+.
+
+            ### What's inside
+            - 20 buildings across 4 districts with 3 upgrade levels
+            - Living traffic, day/night cycle, dynamic procedural goals
+            - Kenney CC0 models & sounds, Kevin MacLeod CC BY ambient music
+          files: dist/*.apk
+          make_latest: true
+          fail_on_unmatched_files: true

@@ -1,0 +1,28 @@
+# Normalize text files, never touch binaries.
+* text=auto eol=lf
+
+*.gd       text
+*.tscn     text
+*.tres     text
+*.godot    text
+*.cfg      text
+*.md       text
+*.yml      text
+*.yaml     text
+*.json     text
+*.svg      text
+*.gdshader text
+
+*.glb      binary
+*.gltf     binary
+*.png      binary
+*.jpg      binary
+*.webp     binary
+*.mp3      binary
+*.ogg      binary
+*.wav      binary
+*.ttf      binary
+*.otf      binary
+*.apk      binary
+*.pck      binary
+*.import   text

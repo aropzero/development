@@ -1,0 +1,29 @@
+# Godot 4 editor cache / import metadata
+.godot/
+*_imported/
+
+# Build output
+build/
+*.apk
+*.aab
+*.idsig
+*.pck
+*.zip
+
+# Export credentials (never commit signing keys)
+export_credentials.cfg
+*.keystore
+*.jks
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log

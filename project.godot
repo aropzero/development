@@ -1,0 +1,88 @@
+; Engine configuration file.
+; Horizon City — a calm 3D city builder for Android & desktop.
+; Generated / maintained by the project build tooling.
+
+config_version=5
+
+[application]
+
+config/name="Horizon City"
+config/description="A calm, beautiful 3D city builder. Place homes, shops and parks, keep your citizens happy and watch your skyline rise."
+config/version="1.0.0"
+run/main_scene="res://scenes/Boot.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.043, 0.067, 0.118, 1)
+boot_splash/show_image=false
+boot_splash/fullsize=false
+config/use_custom_user_dir=true
+config/custom_user_dir_name="HorizonCity"
+config/quit_on_go_back=false
+
+[autoload]
+
+Cfg="*res://scripts/autoload/GameConfig.gd"
+BuildingDB="*res://scripts/autoload/BuildingDB.gd"
+SaveManager="*res://scripts/autoload/SaveManager.gd"
+AudioMgr="*res://scripts/autoload/AudioManager.gd"
+GameState="*res://scripts/autoload/GameState.gd"
+QuestManager="*res://scripts/autoload/QuestManager.gd"
+SceneManager="*res://scripts/autoload/SceneManager.gd"
+
+
+[audio]
+
+driver/enable_input=false
+
+[debug]
+
+file_logging/enable_file_logging.pc=false
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+window/energy_saving/keep_screen_on=true
+window/energy_saving/keep_screen_on.mobile=true
+
+[gui]
+
+theme/default_font_multichannel_signed_distance_field=true
+theme/default_font_subpixel_positioning=1
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=false
+pointing/emulate_mouse_from_touch=true
+
+[layer_names]
+
+3d_render/layer_1="world"
+3d_render/layer_2="ghost"
+3d_render/layer_3="overlay"
+
+[physics]
+
+common/physics_ticks_per_second=30
+3d/default_gravity=0.0
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+textures/default_filters/use_nearest_mipmap_filter=false
+anti_aliasing/quality/msaa_3d=1
+anti_aliasing/quality/screen_space_aa=0
+environment/defaults/default_clear_color=Color(0.07, 0.1, 0.16, 1)
+environment/defaults/default_environment=""
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=2
+lights_and_shadows/directional_shadow/size=2048
+lights_and_shadows/directional_shadow/size.mobile=1024
+limits/opengl/max_lights_per_object=6
+camera/depth_of_field/depth_of_field_bokeh_quality=0
