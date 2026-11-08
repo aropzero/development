@@ -193,6 +193,17 @@ jobs:
           ~/godot/godot --headless --path . --export-debug "Android" "build/${EXPORT_NAME}.apk"
           ls -lh build/
 
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          APK="build/${EXPORT_NAME}.apk"
+          test -f "$APK"
+          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          "$BT/apksigner" verify --print-certs "$APK"
+          "$BT/aapt2" dump badging "$APK" | head -5
+          unzip -l "$APK" | grep -q "assets/scenes/Game.tscn.remap"
+          echo "APK verified: $(du -h "$APK" | cut -f1)"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -239,7 +250,7 @@ jobs:
             ### Install
             1. Download `HorizonCity.apk` below.
             2. Allow "Install unknown apps" for your browser / file manager.
-            3. Open the file and install. Works on arm64 Android 6.0+.
+            3. Open the file and install. Works on arm64 devices running Android 7.0+.
 
             ### What's inside
             - 20 buildings across 4 districts with 3 upgrade levels

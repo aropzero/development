@@ -71,7 +71,7 @@ godot --headless --path . --import
 godot --headless --path . --export-release "Android" build/HorizonCity.apk
 ```
 
-The APK is written to `build/HorizonCity.apk` (arm64-v8a).
+The APK is written to `build/HorizonCity.apk` (arm64-v8a, Android 7.0+).
 
 ### Building an APK on GitHub
 
@@ -119,7 +119,7 @@ and the full 3D game scene:
 
 ```bash
 godot --headless --path . res://tools/SmokeTest.tscn
-# → SMOKE RESULT: PASS (102 checks)
+# → SMOKE RESULT: PASS (100+ checks)
 ```
 
 ---

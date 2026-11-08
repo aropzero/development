@@ -298,6 +298,11 @@ func _tick_day() -> void:
 	task_progress.emit()
 	if money < 0.0:
 		toast.emit("The city is in debt — sell something soon.", "coin", "bad")
+	# Safety net: a completely stalled, penniless city always gets one small
+	# grant so the player can never be permanently soft-locked.
+	if buildings.is_empty() and roads.is_empty() and money < 60.0:
+		money = 400.0
+		toast.emit("The county sends a 400 coin grant to help you rebuild.", "coin", "good")
 
 
 func _recompute_power_only() -> void:

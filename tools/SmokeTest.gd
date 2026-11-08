@@ -119,6 +119,12 @@ func _test_simulation() -> void:
 	GameState._process(1.0)
 	GameState.speed = 1.0
 
+	# Never let a penniless, empty city become unrecoverable.
+	GameState.new_game()
+	GameState.money = -800.0
+	GameState._tick_day()
+	_check(GameState.money >= 400.0, "penniless empty city gets a rescue grant")
+
 
 func _test_quests() -> void:
 	print("[quests]")
